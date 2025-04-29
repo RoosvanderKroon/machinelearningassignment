@@ -1,0 +1,151 @@
+---
+title: "Weight Lifting Exercise Classification"
+author: "RoosvdKroon"
+output: html_document
+---
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r,echo=TRUE}
+library(caret)
+library(randomForest)
+library(rpart)
+library(ggplot2)
+library(dplyr)
+library(reshape2)
+library(corrplot)
+```
+
+## Introduction
+This report investigates how well different barbell lifting movements can be classified based on accelerometer data from various body locations. The classification task involves predicting the classe variable using sensor measurements.
+
+## Loading and preprocessing data
+```{r,echo=TRUE}
+train_url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+test_url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+training <- read.csv(url(train_url), na.strings = c("NA", "#DIV/0!", ""))
+testing <- read.csv(url(test_url), na.strings = c("NA", "#DIV/0!", ""))
+
+
+# Remove near-zero variance
+nzv <- nearZeroVar(training)
+training <- training[, -nzv]
+
+# Remove mostly NA columns
+na_threshold <- 0.95
+missing <- sapply(training, function(x) mean(is.na(x)))
+training <- training[, missing < na_threshold]
+
+# Remove first 5 non-predictor columns
+training <- training[, -c(1:5)]
+
+# Partition after cleaning
+set.seed(123)
+inTrain <- createDataPartition(training$classe, p = 0.7, list = FALSE)
+train_set <- training[inTrain, ]
+valid_set <- training[-inTrain, ]
+
+# Sample for fast training
+set.seed(456)
+train_sample <- train_set %>% group_by(classe) %>% sample_n(400) %>% ungroup()
+
+```
+
+## Exploratory analysis
+```{r,echo=TRUE}
+
+summary(train_set$classe)
+#Class distribution
+ggplot(train_sample, aes(x = classe)) +
+  geom_bar(fill = "steelblue") +
+  labs(title = "Distribution of Classe", x = "Classe", y = "Count")
+
+
+# Correlation plot (on numeric vars)
+numeric_vars <- sapply(train_sample, is.numeric)
+cor_matrix <- cor(train_sample[, numeric_vars])
+melted_cor <- melt(cor_matrix)
+
+ggplot(melted_cor, aes(x = Var1, y = Var2, fill = value)) +
+  geom_tile() +
+  scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(title = "Feature Correlation")
+
+```
+
+## Model Training and evaluation
+
+```{r, echo=TRUE}
+
+# Set the seed for reproducibility
+set.seed(789)
+
+# Define the control object for cross-validation (10-fold)
+control <- trainControl(method = "cv", number = 10)
+
+# Train the Random Forest model
+model_rf <- train(classe ~ ., data = train_sample, method = "rf", trControl = control, ntree = 100)
+
+# Ensure the 'classe' column in validation set is a factor
+valid_set$classe <- factor(valid_set$classe)
+
+# Predict using the trained model
+pred_valid <- predict(model_rf, newdata = valid_set)
+
+# Convert predictions to factor with the same levels as the actual 'classe' values
+pred_valid <- factor(pred_valid, levels = levels(valid_set$classe))
+
+# Generate the confusion matrix to evaluate the model
+confusionMatrix(pred_valid, valid_set$classe)
+```
+
+
+## Predictions on Test Set
+```{r,echo=TRUE}
+predictions <- predict(model_rf, testing)
+predictions
+
+```
+## Cross-Validation and Out-of-Sample Error Estimation
+
+To assess the performance of the Random Forest model, I employed 10-fold cross-validation. This approach divides the data into 10 subsets, training the model on 9 subsets and validating it on the remaining fold. This process was repeated 10 times, ensuring that every observation was used for both training and validation.
+
+The cross-validation results indicated that the model achieved a high accuracy of 96.79% on the validation set. This suggests that the model generalizes well to unseen data. Based on the confusion matrix, the expected out-of-sample error is approximately 3–4%, as the model's performance is expected to slightly degrade when tested on completely new data.
+
+Overall, the model demonstrated strong performance across all classes, with the highest sensitivity and specificity for each class. The Kappa statistic of 0.9594 further supports the model's reliability and agreement with actual labels.
+
+
+## Apply Model to the 20 Test Cases
+```{r, echo=TRUE}
+# Load the test data
+test_url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+test_data <- read.csv(url(test_url), na.strings = c("NA", "#DIV/0!", ""))
+
+# View the structure of the test data to ensure it matches the format of the training data
+str(test_data)
+
+# Remove columns that were not included in the model (e.g., irrelevant columns or identifiers)
+test_data_clean <- test_data[, -nearZeroVar(test_data)]
+
+# Remove columns with missing values if necessary
+test_data_clean <- test_data_clean[, colSums(is.na(test_data_clean)) == 0]
+
+# Predict the outcomes on the test data
+pred_test <- predict(model_rf, test_data_clean)
+
+
+# Store the predictions in a data frame
+test_predictions <- data.frame(Predicted_Class = pred_test)
+
+# View the predictions
+print(test_predictions)
+
+```
+
+
