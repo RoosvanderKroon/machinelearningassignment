@@ -1,3 +1,11 @@
+FOR THE RENDERED HTML WITH PLOTS ETC VISIT:
+https://roosvanderkroon.github.io/machinelearningassignment/MachineLearningAssignment+20testcases.html
+
+
+
+
+
+
 # Peer-graded Assignment: Prediction Assignment Writeup
 
 This project is part of the Coursera course [Practical Machine Learning](https://www.coursera.org/learn/practical-machine-learning). The goal is to use data from accelerometers to predict the manner in which participants performed barbell lifts.
